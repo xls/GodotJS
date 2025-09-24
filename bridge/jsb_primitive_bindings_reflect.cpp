@@ -1041,10 +1041,10 @@ namespace jsb
             {
                 if (r_class_id) *r_class_id = class_id;
 
-                NativeClassInfoPtr class_info = p_env.env->get_native_class(class_id);
-                class_info->clazz = class_builder.Build();
-                jsb_check(!class_info->clazz.IsEmpty());
-                return class_info;
+                NativeClassInfoPtr final_class_info = p_env.env->get_native_class(class_id);
+                final_class_info->clazz = class_builder.Build();
+                jsb_check(!final_class_info->clazz.IsEmpty());
+                return final_class_info;
             }
         }
     };
