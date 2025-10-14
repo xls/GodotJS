@@ -124,10 +124,10 @@ private:
     // script class handle
     jsb::ScriptClassID class_id_;
 
-    // object handle (the JS object binding id)
+    // object handle (the JS object binding id)B
     jsb::NativeObjectID object_id_;
 
-    HashMap<Variant, Variant, VariantHasher, StringLikeVariantComparator> property_cache_;
+    HashMap<Variant, Variant, HashMapHasherDefault, StringLikeVariantComparator> property_cache_;
 
 private:
     jsb::ScriptClassInfoPtr get_script_class() const;

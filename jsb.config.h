@@ -29,7 +29,7 @@
 // see `internal/jsb_log_severity.def.h`
 #ifndef JSB_MIN_LOG_LEVEL
 #   if JSB_DEBUG
-#       define JSB_MIN_LOG_LEVEL Verbose
+#       define JSB_MIN_LOG_LEVEL VeryVerbose
 #   else
 #       define JSB_MIN_LOG_LEVEL Warning
 #   endif

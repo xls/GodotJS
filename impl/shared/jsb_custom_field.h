@@ -35,7 +35,7 @@ namespace jsb::impl
         } u;
 
         Type type;
-        HintFlags hint;
+        HintFlags hint = HINT_NONE;
 
         static CustomField value_u64(const String& p_name, const uint64_t p_value, const HintFlags p_flags = HINT_NONE)
         {

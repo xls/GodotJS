@@ -376,8 +376,8 @@ namespace jsb::internal
 		}
 #endif
 
-		List<StringName> all_class_names;
-		ClassDB::get_class_list(&all_class_names);
+		LocalVector<StringName> all_class_names;
+		ClassDB::get_class_list(all_class_names);
 
 		List<StringName> exposed_class_names;
 
