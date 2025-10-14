@@ -188,11 +188,14 @@ export function export_dictionary(key_class: VariantConstructor, value_class: Va
 export const ExportDictionary = export_dictionary;
 
 function get_hint_string_for_enum(enum_type: Record<string, string | number>): string {
-    const enum_vs: Array<string> = [];
-    for (const [key, value] of Object.keys(enum_type)) {
-        enum_vs.push(`${key}:${value}`);
+  const items: string[] = [];
+  for (const [k, v] of Object.entries(enum_type)) {
+    // keep only name -> number entries, ignore reverse "0":"Up"
+    if (typeof v === "number" && !/^\d+$/.test(k)) {
+      items.push(`${k}:${v}`);
     }
-    return enum_vs.join(",");
+  }
+  return items.join(",");
 }
 
 function get_hint_string(clazz: any): string {
@@ -864,20 +867,19 @@ export function createClassBinder(): ClassBinder {
                 });
             },
             flags(enum_type: Record<string, string | number>): ClassMemberDecorator {
-                const hints: Array<string> = [];
+				const hints: string[] = [];
 
-                for (const [key, value] of Object.entries(enum_type)) {
-                    if (value !== 0) {
-                        hints.push(key + ":" + value);
-                    }
-                }
-
-                return bind_export(Variant.Type.TYPE_INT, {
-                    hint: PropertyHint.PROPERTY_HINT_FLAGS,
-                    hint_string: hints.join(","),
-                    usage: PropertyUsageFlags.PROPERTY_USAGE_DEFAULT,
-                });
-            },
+				for (const [key, value] of Object.entries(enum_type)) {
+					if (typeof value === "number" && value !== 0) { // ignore reverse entries and 0
+						hints.push(`${key}:${value}`);
+				}
+			  }
+			  return bind_export(Variant.Type.TYPE_INT, {
+				hint: PropertyHint.PROPERTY_HINT_FLAGS,
+				hint_string: hints.join(","),
+				usage: PropertyUsageFlags.PROPERTY_USAGE_DEFAULT,
+			  });
+			},
             cache(): ClassMemberDecorator<ClassAccessorDecoratorContext<Godot.Object> | ClassSetterDecoratorContext<Godot.Object>> {
                 return (target, context) => {
                     if (typeof context !== "object") {
