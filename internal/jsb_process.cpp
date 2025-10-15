@@ -59,6 +59,12 @@ namespace jsb::internal
             return p_text;
         }
 
+        void _append_char_to_line(char c)
+        {
+            const int old = rd_line.size();
+            rd_line.resize_uninitialized(old + 1);
+            rd_line.ptrw()[old] = c;
+        }
         void _flush()
         {
             if (rd_line.is_empty()) return;
@@ -141,7 +147,7 @@ namespace jsb::internal
         static void _thread_run(void* p_userdata)
         {
             ProcessImpl* impl = (ProcessImpl*) p_userdata;
-            int start_state = 0;
+            
             char buffer[4096];
 
             ThreadUtil::set_name(impl->proc_name);
@@ -156,31 +162,53 @@ namespace jsb::internal
 
                 // Assume that all possible encodings are ASCII-compatible.
                 // Break at newline to allow receiving long output in portions.
-                for (DWORD i = 0; i < read; ++i)
-                {
-                    if (start_state == 0)
+                // Consume this chunk, stripping ANSI sequences as we go.
+                for (DWORD i = 0; i < read; ++i) {
+                    unsigned char ch = static_cast<unsigned char>(buffer[i]);
+                    if (ch == 0x1B) // ESC – strip known sequences
                     {
-                        if (buffer[i] == '\x1b')
-                        {
-                            start_state = 1;
-                            continue;
+                        if (i + 1 < read) {
+                            const unsigned char next = static_cast<unsigned char>(buffer[i + 1]);
+                            if (next == '[') {
+                                // CSI: ESC [ ... final (0x40..0x7E)
+                                i += 2;
+                                while (i < read) {
+                                    unsigned char c = static_cast<unsigned char>(buffer[i]);
+                                    if (c >= 0x40 && c <= 0x7E) {
+                                        break;
+                                    }
+                                    ++i;
+                                }
+                            } else if (next == ']') {
+                                // OSC: ESC ] ... BEL (0x07) or ST (ESC \)
+                                i += 2;
+                                while (i < read) {
+                                    unsigned char c = static_cast<unsigned char>(buffer[i]);
+                                    if (c == 0x07) {
+                                        break; // BEL
+                                    }
+                                    if (c == 0x1B && (i + 1) < read && static_cast<unsigned char>(buffer[i + 1]) == '\\') {
+                                        ++i;
+                                        break;
+                                    }
+                                    ++i;
+                                }
+                            } else {
+                                // Other simple 2-byte sequences (e.g., ESC c)
+                                ++i;
+                            }
                         }
-                        start_state = 2;
-                    }
-                    else if (start_state == 1)
-                    {
-                        start_state = 2;
-                        if (buffer[i] == 'c')  { continue; }
+                        continue; // skip writing ESC sequence bytes
                     }
 
                     if (buffer[i] == '\n' || buffer[i] == '\r')
                     {
+                        impl->_append_char_to_line(0);
                         impl->_flush();
-                        start_state = 0;
                     }
                     else
                     {
-                        impl->rd_line.push_back(buffer[i]);
+                        impl->_append_char_to_line(buffer[i]);
                     }
                 }
             }
@@ -281,42 +309,72 @@ namespace jsb::internal
             return OK;
         }
 
+        void _append_char_to_line(char c)
+        {
+            const int old = rd_line.size();
+            rd_line.resize_uninitialized(old + 1);
+            rd_line.ptrw()[old] = c;
+        }
+
         static void _thread_run(void* p_userdata)
         {
             ProcessImpl* impl = (ProcessImpl*) p_userdata;
             char buffer[4096];
-            int start_state = 0;
 
             ThreadUtil::set_name(impl->proc_name);
             while (!impl->is_closing)
             {
                 ssize_t bytes_read = 0;
-                while ((bytes_read = read(impl->pipefd[0], buffer, sizeof(buffer) - 1)) > 0)
+                while ((bytes_read = read(impl->pipefd[0], buffer, sizeof(buffer))) > 0)
                 {
+                    // Consume this chunk, stripping ANSI sequences as we go.
                     for (ssize_t i = 0; i < bytes_read; ++i)
                     {
-                        if (start_state == 0)
+                        unsigned char ch = static_cast<unsigned char>(buffer[i]);
+                        if (ch == 0x1B) // ESC – strip known sequences
                         {
-                            if (buffer[i] == '\x1b')
-                            {
-                                start_state = 1;
-                                continue;
+                            if (i + 1 < bytes_read) {
+                                const unsigned char next = static_cast<unsigned char>(buffer[i + 1]);
+                                if (next == '[') {
+                                    // CSI: ESC [ ... final (0x40..0x7E)
+                                    i += 2;
+                                    while (i < bytes_read) {
+                                        unsigned char c = static_cast<unsigned char>(buffer[i]);
+                                        if (c >= 0x40 && c <= 0x7E) {
+                                            break;
+                                        }
+                                        ++i;
+                                    }
+                                } else if (next == ']') {
+                                    // OSC: ESC ] ... BEL (0x07) or ST (ESC \)
+                                    i += 2;
+                                    while (i < bytes_read) {
+                                        unsigned char c = static_cast<unsigned char>(buffer[i]);
+                                        if (c == 0x07) {
+                                            break; // BEL
+                                        }
+                                        if (c == 0x1B && (i + 1) < bytes_read && static_cast<unsigned char>(buffer[i + 1]) == '\\') {
+                                            ++i;
+                                            break;
+                                        }
+                                        ++i;
+                                    }
+                                } else {
+                                    // Other simple 2-byte sequences (e.g., ESC c)
+                                    ++i;
+                                }
                             }
-                            start_state = 2;
-                        }
-                        else if (start_state == 1)
-                        {
-                            start_state = 2;
-                            if (buffer[i] == 'c')  { continue; }
+                            continue; // skip writing ESC sequence bytes
                         }
 
                         if (buffer[i] == '\n' || buffer[i] == '\r')
                         {
+                            impl->_append_char_to_line(0);
                             impl->_flush();
                         }
                         else
                         {
-                            impl->rd_line.push_back(buffer[i]);
+                            impl->_append_char_to_line(buffer[i]);
                         }
                     }
                 }
