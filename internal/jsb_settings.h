@@ -37,6 +37,8 @@ namespace jsb::internal
 
         static bool get_camel_case_bindings_enabled();
 
+        static PackedStringArray get_preload_asm_modules();
+
         static bool is_packaging_with_source_map();
 
         static PackedStringArray get_packaging_include_files();

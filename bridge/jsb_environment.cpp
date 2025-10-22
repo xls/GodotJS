@@ -458,6 +458,49 @@ namespace jsb
         AMDModuleLoader::load_source(this, kDummyModule, sizeof(kDummyModule) - 1, kEditorBundleFile);
 #endif
 
+        // load preload ASM modules from project settings
+        const PackedStringArray preload_modules = jsb::internal::Settings::get_preload_asm_modules();
+        for (int i = 0; i < preload_modules.size(); ++i)
+        {
+            const String& module_path = preload_modules[i];
+            if (module_path.is_empty())
+            {
+                continue;
+            }
+
+            JSB_LOG(Verbose, "preloading ASM module: %s", module_path);
+            
+            // Load the file content
+            Ref<FileAccess> file = FileAccess::open(module_path, FileAccess::READ);
+            if (file.is_null())
+            {
+                JSB_LOG(Warning, "failed to open ASM module file '%s'", module_path);
+                continue;
+            }
+            
+            const uint64_t file_len = file->get_length();
+            if (file_len == 0)
+            {
+                JSB_LOG(Warning, "ASM module file '%s' is empty", module_path);
+                continue;
+            }
+            
+            // Read file content into buffer
+            Vector<uint8_t> buffer;
+            buffer.resize((int)file_len);
+            const uint64_t bytes_read = file->get_buffer(buffer.ptrw(), file_len);
+            if (bytes_read != file_len)
+            {
+                JSB_LOG(Warning, "failed to read ASM module file '%s'", module_path);
+                continue;
+            }
+            
+            // Extract just the filename for the module name
+            const String module_name = module_path.get_file();
+            
+            // Load as AMD module
+            AMDModuleLoader::load_source(this, (const char*)buffer.ptr(), (int)file_len, module_name, false);
+        }
     }
 
     void Environment::dispose()

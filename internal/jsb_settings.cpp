@@ -29,6 +29,7 @@ namespace jsb::internal
     static constexpr char kRtAdditionalSearchPaths[] = JSB_MODULE_NAME_STRING "/runtime/core/additional_search_paths";
     static constexpr char kRtEntryScriptPath[] = JSB_MODULE_NAME_STRING "/runtime/core/entry_script_path";
     static constexpr char kRtCamelCaseBindingsEnabled[] = JSB_MODULE_NAME_STRING "/runtime/core/camel_case_bindings_enabled";
+    static constexpr char kRtPreloadAsmModules[] = JSB_MODULE_NAME_STRING "/runtime/core/preload_asm_modules";
 
     // editor specific settings, but we need it configured as project-wise instead of global-wise
     static constexpr char kRtPackagingWithSourceMap[] = JSB_MODULE_NAME_STRING "/editor/packaging/source_map_included";
@@ -89,6 +90,15 @@ namespace jsb::internal
             _GLOBAL_DEF(kRtSourceMapEnabled, true, JSB_SET_RESTART(false), JSB_SET_IGNORE_DOCS(false), JSB_SET_BASIC(true),  JSB_SET_INTERNAL(false));
             _GLOBAL_DEF(kRtAdditionalSearchPaths, PackedStringArray(), JSB_SET_RESTART(false),  JSB_SET_IGNORE_DOCS(false), JSB_SET_BASIC(true),  JSB_SET_INTERNAL(false));
             _GLOBAL_DEF(kRtCamelCaseBindingsEnabled, false, JSB_SET_RESTART(true), JSB_SET_IGNORE_DOCS(false), JSB_SET_BASIC(true),  JSB_SET_INTERNAL(false));
+
+            {
+                PropertyInfo PreloadAsmModules;
+                PreloadAsmModules.type = Variant::ARRAY;
+                PreloadAsmModules.name = kRtPreloadAsmModules;
+                PreloadAsmModules.hint = PROPERTY_HINT_ARRAY_TYPE;
+                PreloadAsmModules.hint_string = vformat("%s/%s:%s", Variant::STRING, PROPERTY_HINT_FILE, filter);
+                _GLOBAL_DEF(PreloadAsmModules, Array(), JSB_SET_RESTART(false), JSB_SET_IGNORE_DOCS(false), JSB_SET_BASIC(true), JSB_SET_INTERNAL(false));
+            }
 
             {
                 PropertyInfo EntryScriptPath;
@@ -255,6 +265,13 @@ namespace jsb::internal
     {
         init_settings();
         return GLOBAL_GET(kRtCamelCaseBindingsEnabled);
+    }
+
+    PackedStringArray Settings::get_preload_asm_modules()
+    {
+        init_settings();
+        // rely on auto variant convert from Array
+        return (PackedStringArray) GLOBAL_GET(kRtPreloadAsmModules);
     }
 
     String Settings::get_indentation()
