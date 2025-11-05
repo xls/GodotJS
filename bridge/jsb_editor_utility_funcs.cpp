@@ -332,6 +332,20 @@ namespace jsb
             set_field(isolate, context, object, JSB_GET_FIELD_NAME_PRESET(enum_info, is_bitfield));
         }
 
+        void build_enum_info(v8::Isolate* isolate, const v8::Local<v8::Context>& context, const AHashMap<StringName, int64_t>& constants, const StringName &enum_name, const ClassDB::ClassInfo::EnumInfo& enum_info, const v8::Local<v8::Object>& object)
+        {
+            v8::Local<v8::Object> values_object = v8::Object::New(isolate);
+            int index = 0;
+            for (List<StringName>::ConstIterator it = enum_info.constants.begin(); it != enum_info.constants.end(); ++it, ++index)
+            {
+                int64_t value = constants.get(*it);
+                const String name = internal::NamingUtil::get_enum_value_name(*it);
+                values_object->Set(context, impl::Helper::new_string(isolate, name), v8::Number::New(isolate, value)).Check();
+            }
+            set_field(isolate, context, object, "literals", values_object);
+            set_field(isolate, context, object, JSB_GET_FIELD_NAME_PRESET(enum_info, is_bitfield));
+        }
+
         void build_signal_info(v8::Isolate* isolate, const v8::Local<v8::Context>& context, const MethodInfo& method_info, const v8::Local<v8::Object>& signal_obj)
         {
             v8::Local<v8::Object> method_obj = v8::Object::New(isolate);
@@ -438,7 +452,7 @@ namespace jsb
                 v8::Local<v8::Array> enums_obj = v8::Array::New(isolate, (int) class_info.enum_map.size());
                 set_field(isolate, context, class_info_obj, "enums", enums_obj);
                 int index = 0;
-                HashMap<StringName, int64_t> constants = class_info.constant_map;
+                const AHashMap<StringName, int64_t>& constants = class_info.constant_map;
                 for (const KeyValue<StringName, ClassDB::ClassInfo::EnumInfo>& pair : class_info.enum_map)
                 {
                     JSB_HANDLE_SCOPE(isolate);
