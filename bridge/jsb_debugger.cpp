@@ -11,9 +11,9 @@
 namespace jsb
 {
     constexpr int kContextGroupId = 1;
-    constexpr int kMaxSendBufSize = 1024 * 1024;
-    constexpr int kMaxRecvBufSize = 1024 * 1024;
-    constexpr int kMaxProtocolBufSize = 1024 * 1024 * 2;
+    constexpr int kMaxSendBufSize = 1024 * 1024 * 50;
+    constexpr int kMaxRecvBufSize = 1024 * 1024 * 50;
+    constexpr int kMaxProtocolBufSize = 1024 * 1024 * 100;
 
     namespace
     {
