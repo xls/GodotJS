@@ -318,7 +318,7 @@ namespace jsb
             set_field(isolate, context, object, JSB_GET_FIELD_NAME_PRESET(enum_info, is_bitfield));
         }
 
-        void build_enum_info(v8::Isolate* isolate, const v8::Local<v8::Context>& context, const HashMap<StringName, int64_t>& constants, const StringName &enum_name, const ClassDB::ClassInfo::EnumInfo& enum_info, const v8::Local<v8::Object>& object)
+        void build_enum_info(v8::Isolate* isolate, const v8::Local<v8::Context>& context, const AHashMap<StringName, int64_t>& constants, const StringName &enum_name, const ClassDB::ClassInfo::EnumInfo& enum_info, const v8::Local<v8::Object>& object)
         {
             v8::Local<v8::Object> values_object = v8::Object::New(isolate);
             int index = 0;
@@ -438,7 +438,7 @@ namespace jsb
                 v8::Local<v8::Array> enums_obj = v8::Array::New(isolate, (int) class_info.enum_map.size());
                 set_field(isolate, context, class_info_obj, "enums", enums_obj);
                 int index = 0;
-                HashMap<StringName, int64_t> constants = class_info.constant_map;
+                const auto& constants = class_info.constant_map;
                 for (const KeyValue<StringName, ClassDB::ClassInfo::EnumInfo>& pair : class_info.enum_map)
                 {
                     JSB_HANDLE_SCOPE(isolate);
