@@ -367,9 +367,11 @@ namespace jsb
         {
             memnew_placement(&args[index], Variant);
             argv[index] = &args[index];
+            // FIX: get_argument_type(i) reads argument_types[] (null for GDExtension in release).
+            // get_argument_info(i).type uses the always-valid _gen_argument_type_info virtual.
             const Variant::Type type = index >= method_argc
                 ? Variant::Type::NIL
-                : method_bind->get_argument_type(index);
+                : method_bind->get_argument_info(index).type;
 
             const v8::Local<v8::Value>& argument = info[index];
 
@@ -404,8 +406,9 @@ namespace jsb
             return;
         }
         v8::Local<v8::Value> jrval;
-        const Variant::Type return_type = method_bind->get_argument_type(-1);
-        jsb_check(return_type == method_bind->get_return_info().type);
+        // FIX: get_argument_type(-1) reads argument_types[] which is only populated in
+        // DEBUG_ENABLED builds. get_return_info().type is always valid.
+        const Variant::Type return_type = method_bind->get_return_info().type;
         if (TypeConvert::gd_var_to_js(isolate, context, crval, return_type, jrval))
         {
             info.GetReturnValue().Set(jrval);
@@ -457,8 +460,8 @@ namespace jsb
             return;
         }
         v8::Local<v8::Value> jrval;
-        const Variant::Type return_type = property_info.getter_func->get_argument_type(-1);
-        jsb_check(return_type == property_info.getter_func->get_return_info().type);
+        // FIX: get_argument_type(-1) reads argument_types[] (null for GDExtension in release).
+        const Variant::Type return_type = property_info.getter_func->get_return_info().type;
         if (TypeConvert::gd_var_to_js(isolate, context, crval, return_type, jrval))
         {
             info.GetReturnValue().Set(jrval);
@@ -494,11 +497,17 @@ namespace jsb
         }
 
         Variant cvar;
-        if (!TypeConvert::js_to_gd_var(isolate, context, info[0], property_info.setter_func->get_argument_type(1), cvar))
+        // FIX: get_argument_type() reads argument_types[] (null for GDExtension in release).
+        // This is an indexed property setter — argument 0 is the index, argument 1 is the value.
+        // The original get_argument_type(1) was correct in intent but always failed the bounds
+        // check in debug (returning NIL, causing loose conversion). get_argument_info(1) goes
+        // through the always-valid virtual path and returns the actual value type.
+        const Variant::Type setter_arg_type = property_info.setter_func->get_argument_info(1).type;
+        if (!TypeConvert::js_to_gd_var(isolate, context, info[0], setter_arg_type, cvar))
         {
             const String error_message = jsb_errorf("Failed to set property: %s. Unable to convert provided JS %s to Godot %s",
                 property_info.setter_func->get_name(), TypeConvert::js_debug_typeof(isolate, info[0]),
-                Variant::get_type_name(property_info.setter_func->get_argument_type(1)));
+                Variant::get_type_name(setter_arg_type));
             impl::Helper::throw_error(isolate, error_message);
             return;
         }
