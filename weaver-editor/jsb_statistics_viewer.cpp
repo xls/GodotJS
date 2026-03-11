@@ -71,7 +71,7 @@ namespace
     template <typename T>
     String to_percentage(T n, T d)
     {
-        return d == 0 ? "?" : itos((int64_t) ((double) n / (double) d) * 100);
+        return d == 0 ? "?" : itos((int64_t) (((double) n / (double) d) * 100));
     }
 
     String humanized(int64_t p_size, jsb::impl::CustomField::HintFlags p_hint)
