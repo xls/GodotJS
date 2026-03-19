@@ -855,10 +855,12 @@ namespace jsb
                 JSB_LOG(Error, "can not bind a dead object %d", (uintptr_t) p_pointer);
                 return {};
             }
-            // for a ref-counted object which instantiated by GodotJS, the external_rc will be 0.
-            // then, the object will behave like a managed JS object.
-            // otherwise, it will be strongly referenced in JS until all external references are released (unreference).
-            external_rc = ref_counted->get_reference_count() - 1;
+            // Follow the C# binding pattern (csharp_script.cpp):
+            // external_rc is 0 (weak/GC-managed) when only our init_ref holds
+            // a reference, or 1 (strong) when Godot also holds references.
+            // reference_object() reads the live Godot refcount on each callback
+            // to decide strong vs weak, so this just sets the initial state.
+            external_rc = (ref_counted->get_reference_count() > 1) ? 1 : 0;
         }
         const NativeObjectID object_id = bind_pointer(p_class_id, NativeClassType::GodotObject, (void*) p_pointer, p_object, external_rc);
 
@@ -907,7 +909,16 @@ namespace jsb
         if (!persistent_objects_.has(p_pointer))
         {
             persistent_objects_.insert(p_pointer);
-            reference_object(p_pointer, true);
+
+            // Directly make the V8 handle strong instead of going through
+            // reference_object(), which is only for RefCounted ref/unref callbacks.
+            const ObjectHandlePtr object_handle = object_db_.try_get_object(p_pointer);
+            if (jsb_likely(object_handle) && object_handle->ref_count_ == 0)
+            {
+                jsb_check(!object_handle->ref_.IsEmpty());
+                object_handle->ref_.ClearWeak();
+                object_handle->ref_count_ = 1;
+            }
             return;
         }
         JSB_LOG(Error, "duplicate adding persistent object: %d", (uintptr_t) p_pointer);
@@ -922,6 +933,11 @@ namespace jsb
         return p_obj->GetAlignedPointerFromInternalField(IF_Pointer);
     }
 
+    // Called only from the RefCounted::reference()/unreference() callback path.
+    // Mirrors Godot's C# binding (_instance_binding_reference_callback in csharp_script.cpp):
+    // reads the live Godot refcount to decide strong vs weak, instead of maintaining a
+    // shadow counter that drifts out of sync (Godot only fires the callback at low
+    // refcount thresholds, not on every ref/unref).
     bool Environment::reference_object(void* p_pointer, bool p_is_inc)
     {
         check_internal_state();
@@ -932,31 +948,33 @@ namespace jsb
             return false;
         }
 
-        // must not be a valuetype object
-        // jsb_check(native_classes_.get_value(object_handle->class_id).type != NativeClassType::GodotPrimitive);
+        // This callback only fires from RefCounted::reference()/unreference().
+        // If this ever triggers, something is fundamentally wrong in the call chain.
+        RefCounted* rc_owner = Object::cast_to<RefCounted>(static_cast<Object*>(p_pointer));
+        jsb_check(rc_owner);
 
-        // adding references
+        const int refcount = rc_owner->get_reference_count();
+
         if (p_is_inc)
         {
-            if (object_handle->ref_count_ == 0)
+            // Refcount incremented — if currently weak and Godot holds refs, go strong
+            if (refcount > 1 && object_handle->ref_count_ == 0)
             {
-                // becomes a strong reference
                 jsb_check(!object_handle->ref_.IsEmpty());
                 object_handle->ref_.ClearWeak();
+                object_handle->ref_count_ = 1;
             }
-            ++object_handle->ref_count_;
             return true;
         }
 
-        // removing references
+        // Refcount decremented — if only our init_ref remains, go weak for GC
         jsb_checkf(!object_handle->ref_.IsEmpty(), "removing references on dead values");
-        jsb_check(object_handle->ref_count_ > 0);
 
-        --object_handle->ref_count_;
-        if (object_handle->ref_count_ == 0)
         {
+            object_handle->ref_count_ = 0;
             object_handle->ref_.SetWeak(p_pointer, &object_gc_callback, v8::WeakCallbackType::kInternalFields);
         }
+        
         return true;
     }
 
