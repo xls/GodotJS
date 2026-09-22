@@ -290,9 +290,18 @@ void GodotJSExportPlugin::_export_file(const String& p_path, const String& p_typ
     // Outside Full mode we do not auto-compile/pack the .ts of force-included
     // resources (e.g. the autoload closure). Only scripts packaged explicitly
     // in _export_begin (None: none; Explicit: the listed directories) are kept.
+    //
+    // export_filter=all_resources reaches this via a different path than
+    // export_filter=resources: it walks the indexed filesystem directly
+    // (_export_find_resources), so the already-compiled .js (and its .map)
+    // shows up here as its own candidate, not just via a .ts ext_resource
+    // reference. Both must be skipped outside Full mode, or a data-only bundle
+    // silently reabsorbs the whole compiled script tree.
     if (get_script_packaging_mode() != SCRIPT_PACKAGING_FULL)
     {
-        if (p_path.ends_with("." JSB_TYPESCRIPT_EXT))
+        if (p_path.ends_with("." JSB_TYPESCRIPT_EXT)
+            || p_path.ends_with("." JSB_JAVASCRIPT_EXT)
+            || p_path.ends_with("." JSB_JAVASCRIPT_EXT ".map"))
         {
             skip();
         }
