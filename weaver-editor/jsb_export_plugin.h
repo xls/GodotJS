@@ -15,6 +15,16 @@ class GodotJSExportPlugin: public EditorExportPlugin
     GDCLASS(GodotJSExportPlugin, EditorExportPlugin)
 
 public:
+    // How much of the compiled GodotJS script tree to package into an export.
+    // Full: project-wide include settings (base game). None: no scripts (data
+    // bundle). Explicit: only the directories listed on the preset.
+    enum ScriptPackaging
+    {
+        SCRIPT_PACKAGING_FULL = 0,
+        SCRIPT_PACKAGING_NONE = 1,
+        SCRIPT_PACKAGING_EXPLICIT = 2,
+    };
+
     GodotJSExportPlugin();
     virtual String get_name() const override;
     virtual bool supports_platform(const Ref<EditorExportPlatform>& p_export_platform) const override;
@@ -26,8 +36,12 @@ protected:
     virtual void _export_file(const String& p_path, const String& p_type, const HashSet<String>& p_features) override;
 
     virtual PackedStringArray _get_export_features(const Ref<EditorExportPlatform>& p_export_platform, bool p_debug) const override;
+    virtual void _get_export_options(const Ref<EditorExportPlatform>& p_export_platform, List<EditorExportPlatform::ExportOption>* r_options) const override;
 
 private:
+    ScriptPackaging get_script_packaging_mode() const;
+    PackedStringArray get_script_packaging_directories() const;
+
     static HashSet<String> ignored_paths_;
 
     bool export_compiled_script(const String& p_path);

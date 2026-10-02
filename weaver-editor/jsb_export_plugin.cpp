@@ -26,6 +26,42 @@ PackedStringArray GodotJSExportPlugin::_get_export_features(const Ref<EditorExpo
     return {};
 }
 
+// Per-preset control over how much of the compiled GodotJS script tree is
+// packaged into this export. Exposed as a typed option in the export dialog
+// (stored in export_presets.cfg under the preset's options).
+void GodotJSExportPlugin::_get_export_options(const Ref<EditorExportPlatform>& p_export_platform, List<EditorExportPlatform::ExportOption>* r_options) const
+{
+    r_options->push_back(EditorExportPlatform::ExportOption(
+        PropertyInfo(Variant::INT, "godotjs/script_packaging", PROPERTY_HINT_ENUM, "Full,None,Explicit"),
+        SCRIPT_PACKAGING_FULL));
+    r_options->push_back(EditorExportPlatform::ExportOption(
+        PropertyInfo(Variant::PACKED_STRING_ARRAY, "godotjs/script_packaging_directories"),
+        PackedStringArray()));
+}
+
+GodotJSExportPlugin::ScriptPackaging GodotJSExportPlugin::get_script_packaging_mode() const
+{
+    const Variant opt = get_option("godotjs/script_packaging");
+    if (opt.get_type() == Variant::INT)
+    {
+        const int value = (int) opt;
+        if (value == SCRIPT_PACKAGING_NONE) return SCRIPT_PACKAGING_NONE;
+        if (value == SCRIPT_PACKAGING_EXPLICIT) return SCRIPT_PACKAGING_EXPLICIT;
+    }
+    // default / unset / unexpected type -> preserve base-game behavior
+    return SCRIPT_PACKAGING_FULL;
+}
+
+PackedStringArray GodotJSExportPlugin::get_script_packaging_directories() const
+{
+    const Variant opt = get_option("godotjs/script_packaging_directories");
+    if (opt.get_type() == Variant::PACKED_STRING_ARRAY)
+    {
+        return (PackedStringArray) opt;
+    }
+    return PackedStringArray();
+}
+
 void GodotJSExportPlugin::export_raw_files(const PackedStringArray &p_paths, bool p_permit_typescript)
 {
     for (const String& file_path : p_paths)
@@ -89,12 +125,30 @@ void GodotJSExportPlugin::_export_begin(const HashSet<String>& p_features, bool 
     JSB_EXPORTER_LOG(Verbose, "export_begin path: %s", p_path);
     exported_paths_.clear();
 
-    // add all explicitly included file paths in settings
-    const PackedStringArray file_paths = jsb::internal::Settings::get_packaging_include_files();
-    export_raw_files(file_paths, true);
+    // How much of the compiled script tree to package into THIS export. Base
+    // game exports use Full (the project-wide include settings). Data-only
+    // asset bundles use None so they carry no scripts — those live in the
+    // always-mounted base pack. Explicit packages only the directories listed
+    // on the preset (a per-export override of include_directories).
+    const ScriptPackaging mode = get_script_packaging_mode();
+    if (mode == SCRIPT_PACKAGING_NONE)
+    {
+        JSB_EXPORTER_LOG(Verbose, "script_packaging=None - skipping GodotJS script injection");
+        return;
+    }
 
-    // add all explicitly included directory paths
-    const PackedStringArray dir_paths = jsb::internal::Settings::get_packaging_include_directories();
+    // include explicitly listed files (project setting; Full mode only)
+    if (mode == SCRIPT_PACKAGING_FULL)
+    {
+        const PackedStringArray file_paths = jsb::internal::Settings::get_packaging_include_files();
+        export_raw_files(file_paths, true);
+    }
+
+    // include script directories: the project-wide setting (Full) or the
+    // per-preset override list (Explicit).
+    const PackedStringArray dir_paths = mode == SCRIPT_PACKAGING_EXPLICIT
+        ? get_script_packaging_directories()
+        : jsb::internal::Settings::get_packaging_include_directories();
     for (const String& dir_path : dir_paths)
     {
         Vector<String> script_paths;
@@ -232,6 +286,27 @@ bool GodotJSExportPlugin::export_compiled_script(const String& p_path)
 void GodotJSExportPlugin::_export_file(const String& p_path, const String& p_type, const HashSet<String>& p_features)
 {
     //TODO when exporting for web.impl, need to reorganize all scripts into a monolithic script (like webpack)? and preload it before everything get run.
+
+    // Outside Full mode we do not auto-compile/pack the .ts of force-included
+    // resources (e.g. the autoload closure). Only scripts packaged explicitly
+    // in _export_begin (None: none; Explicit: the listed directories) are kept.
+    //
+    // export_filter=all_resources reaches this via a different path than
+    // export_filter=resources: it walks the indexed filesystem directly
+    // (_export_find_resources), so the already-compiled .js (and its .map)
+    // shows up here as its own candidate, not just via a .ts ext_resource
+    // reference. Both must be skipped outside Full mode, or a data-only bundle
+    // silently reabsorbs the whole compiled script tree.
+    if (get_script_packaging_mode() != SCRIPT_PACKAGING_FULL)
+    {
+        if (p_path.ends_with("." JSB_TYPESCRIPT_EXT)
+            || p_path.ends_with("." JSB_JAVASCRIPT_EXT)
+            || p_path.ends_with("." JSB_JAVASCRIPT_EXT ".map"))
+        {
+            skip();
+        }
+        return;
+    }
 
     if (p_path.ends_with("." JSB_TYPESCRIPT_EXT))
     {
