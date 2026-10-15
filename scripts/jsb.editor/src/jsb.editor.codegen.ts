@@ -3494,9 +3494,13 @@ export class SceneTSDCodeGen {
     }
 
     private make_scene_path(scene_path: string, include_filename = true) {
+        // imported scenes (.glb, .gltf, .fbx, .blend, ...) keep their extension, the same as their
+        // resource types (*.glb.gen.ts), otherwise the output would have no .ts extension at all
         const relative_path = (
             include_filename
-                ? scene_path.replace(/\.t?scn$/i, ".nodes.gen.ts")
+                ? /\.t?scn$/i.test(scene_path)
+                    ? scene_path.replace(/\.t?scn$/i, ".nodes.gen.ts")
+                    : scene_path + ".nodes.gen.ts"
                 : scene_path.replace(/\/[^\/]+$/, "")
         ).replace(/^res:\/\/?/, "");
 
