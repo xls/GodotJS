@@ -238,11 +238,13 @@ void GodotJSScriptLanguage::get_string_delimiters(List<String>* p_delimiters) co
 }
 #endif
 
-//TODO this virtual method seems never used in godot?
+#if !GODOT_4_7_OR_NEWER
+//TODO this virtual method seems never used in godot? (removed from ScriptLanguage in 4.7)
 Script* GodotJSScriptLanguage::create_script() const
 {
     return memnew(GodotJSScript);
 }
+#endif
 
 bool GodotJSScriptLanguage::validate(const String& p_script, const String& p_path, List<String>* r_functions, List<ScriptError>* r_errors, List<Warning>* r_warnings, HashSet<int>* r_safe_lines) const
 {

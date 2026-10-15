@@ -173,6 +173,10 @@ jsb_force_inline StringName _scs_create(const char (&literal)[N], bool p_static)
 #   endif
 #endif
 
+#if GODOT_4_7_OR_NEWER
+#   include "core/object/callable_mp.h"
+#endif
+
 namespace jsb::compat
 {
     typedef ::ObjectDB ObjectDB;

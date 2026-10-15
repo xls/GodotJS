@@ -82,7 +82,12 @@ public:
     virtual ScriptInstance* instance_create(Object* p_this) override { return instance_construct(p_this, true); }
 
     virtual PlaceHolderScriptInstance* placeholder_instance_create(Object* p_this) override;
+#if GODOT_4_7_OR_NEWER
+    // no longer virtual in Script since 4.7, kept for internal use
+    bool instance_has(const Object* p_this) const;
+#else
     virtual bool instance_has(const Object* p_this) const override;
+#endif
 
     virtual bool has_source_code() const override { return !source_.is_empty(); }
     virtual String get_source_code() const override { return source_; }

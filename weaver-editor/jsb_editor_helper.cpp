@@ -159,7 +159,11 @@ Dictionary GodotJSEditorHelper::_build_node_type_descriptor(jsb::JSEnvironment& 
 
             if (animation_mixer)
             {
+#if GODOT_4_7_OR_NEWER
+                LocalVector<StringName> library_names;
+#else
                 List<StringName> library_names;
+#endif
                 animation_mixer->get_animation_library_list(&library_names);
 
                 Dictionary animation_libraries_object_literal;
@@ -173,7 +177,11 @@ Dictionary GodotJSEditorHelper::_build_node_type_descriptor(jsb::JSEnvironment& 
 
                     Array animation_names_union_array;
 
+#if GODOT_4_7_OR_NEWER
+                    LocalVector<StringName> animation_names;
+#else
                     List<StringName> animation_names;
+#endif
                     library->get_animation_list(&animation_names);
 
                     for (const StringName& animation_name : animation_names)

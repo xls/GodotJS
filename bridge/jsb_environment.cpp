@@ -7,6 +7,7 @@
 #include "jsb_bridge_helper.h"
 #include "jsb_builtins.h"
 #include "jsb_object_bindings.h"
+#include "../compat/jsb_classdb_compat.h"
 #include "jsb_type_convert.h"
 #include "jsb_class_register.h"
 #include "jsb_worker.h"
@@ -1493,7 +1494,7 @@ namespace jsb
             return nullptr;
         }
 
-        String class_name = internal::NamingUtil::get_class_name(p_class_info->name);
+        String class_name = internal::NamingUtil::get_class_name(compat::ClassInfoCompat::get_name(p_class_info));
 
         if (const NativeClassID* it = godot_classes_index_.getptr(class_name))
         {

@@ -1,6 +1,7 @@
 #include "jsb_object_bindings.h"
 #include "jsb_transpiler.h"
 #include "jsb_type_convert.h"
+#include "../compat/jsb_classdb_compat.h"
 // TODO: Refactor. Violates isolation of bridge.
 #include "../weaver/jsb_script_instance.h"
 #include "../weaver/jsb_script_language.h"
@@ -14,9 +15,9 @@ namespace jsb
 
         jsb_check(p_class_info);
 
-        String class_name = internal::NamingUtil::get_class_name(p_class_info->name);
+        String class_name = internal::NamingUtil::get_class_name(compat::ClassInfoCompat::get_name(p_class_info));
         const NativeClassID class_id = p_env->add_native_class(NativeClassType::GodotObject, class_name);
-        JSB_LOG(VeryVerbose, "expose godot type %s(%d) as %s", p_class_info->name, class_id, class_name);
+        JSB_LOG(VeryVerbose, "expose godot type %s(%d) as %s", compat::ClassInfoCompat::get_name(p_class_info), class_id, class_name);
 
         // construct type template
         {
@@ -24,7 +25,7 @@ namespace jsb
             impl::ClassBuilder class_builder = ObjectTemplate::create(p_env, class_id);
 
             //NOTE all singleton object will overwrite the class itself in 'godot' module, so we need make all things defined on PrototypeTemplate.
-            const bool is_singleton_class = Engine::get_singleton()->has_singleton(p_class_info->name);
+            const bool is_singleton_class = Engine::get_singleton()->has_singleton(compat::ClassInfoCompat::get_name(p_class_info));
             auto static_builder = is_singleton_class ? class_builder.Instance() : class_builder.Static();
 
 #if JSB_EXCLUDE_GETSET_METHODS
@@ -85,41 +86,42 @@ namespace jsb
                 }
             }
 
-             if (p_class_info->name == jsb_string_name(Object))
+             if (compat::ClassInfoCompat::get_name(p_class_info) == jsb_string_name(Object))
              {
                  // class: special methods
                  class_builder.Instance().Method(jsb_literal(free), _godot_object_free);
              }
 
              // class: signals
-             for (const KeyValue<StringName, MethodInfo>& pair : p_class_info->signal_map)
+             compat::ClassInfoCompat::for_each_signal(p_class_info, [&](const StringName& gd_signal_name, const MethodInfo&)
              {
                  v8::HandleScope handle_scope_for_signal(isolate);
-                 String signal_name = internal::NamingUtil::get_member_name(pair.key);
-                 const v8::Local<v8::String> signal_name_js = p_env->get_string_name_cache().get_string_value(isolate, pair.key);
+                 String signal_name = internal::NamingUtil::get_member_name(gd_signal_name);
+                 const v8::Local<v8::String> signal_name_js = p_env->get_string_name_cache().get_string_value(isolate, gd_signal_name);
                  class_builder.Instance().Property(signal_name, _godot_object_signal_get, signal_name_js.As<v8::Value>());
-             }
+             });
 
              HashSet<StringName> enum_consts;
+             const AHashMap<StringName, int64_t>& constant_map = compat::ClassInfoCompat::get_constant_map(p_class_info);
 
              // class: enum (nested in class)
-             for (const KeyValue<StringName, ClassDB::ClassInfo::EnumInfo>& pair : p_class_info->enum_map)
+             compat::ClassInfoCompat::for_each_enum(p_class_info, [&](const StringName& enum_name, const compat::EnumInfoCompat& enum_info)
              {
                  v8::HandleScope handle_scope_for_enum(isolate);
-                 impl::ClassBuilder::EnumDeclaration enumeration = static_builder.Enum(internal::NamingUtil::get_enum_name(pair.key));
-                 for (const StringName& enum_value_name : pair.value.constants)
+                 impl::ClassBuilder::EnumDeclaration enumeration = static_builder.Enum(internal::NamingUtil::get_enum_name(enum_name));
+                 for (const StringName& enum_value_name : enum_info.constants)
                  {
                      const String& js_enum_name = internal::NamingUtil::get_enum_value_name(enum_value_name);
                      jsb_not_implemented(js_enum_name.contains("."), "hierarchically nested definition is currently not supported");
-                     const auto& const_it = p_class_info->constant_map.find(enum_value_name);
+                     const auto& const_it = constant_map.find(enum_value_name);
                      jsb_check(const_it);
                      enumeration.Value(js_enum_name, const_it->value);
                      enum_consts.insert(enum_value_name);
                  }
-             }
+             });
 
              // class: constants
-             for (const KeyValue<StringName, int64_t>& pair : p_class_info->constant_map)
+             for (const KeyValue<StringName, int64_t>& pair : constant_map)
              {
                  if (enum_consts.has(pair.key)) continue;
                  const String& js_const_name = (String) internal::NamingUtil::get_constant_name(pair.key);
@@ -138,7 +140,7 @@ namespace jsb
                 // It's safe to expect that the base class is fully built,
                 // because single inheritance is used in Godot (which means a reflect_bind class will only be accessed until it's fully built).
                 class_builder.Inherit(super_class_info->clazz);
-                JSB_LOG(VeryVerbose, "%s (%d) extends %s (%d)", p_class_info->name, class_id, p_class_info->inherits_ptr->name, super_class_id);
+                JSB_LOG(VeryVerbose, "%s (%d) extends %s (%d)", compat::ClassInfoCompat::get_name(p_class_info), class_id, compat::ClassInfoCompat::get_name(p_class_info->inherits_ptr), super_class_id);
             }
 
             // preparation for return
@@ -147,8 +149,8 @@ namespace jsb
 
                 class_info->clazz = class_builder.Build();
                 jsb_check(!class_info->clazz.IsEmpty());
-                jsb_check(class_info->name == internal::NamingUtil::get_class_name(p_class_info->name));
-                JSB_LOG(VeryVerbose, "build class info %s (%d) exposed as %s, addr: %s", p_class_info->name, class_id, class_info->name, class_info.ptr());
+                jsb_check(class_info->name == internal::NamingUtil::get_class_name(compat::ClassInfoCompat::get_name(p_class_info)));
+                JSB_LOG(VeryVerbose, "build class info %s (%d) exposed as %s, addr: %s", compat::ClassInfoCompat::get_name(p_class_info), class_id, class_info->name, class_info.ptr());
                 if (r_class_id) *r_class_id = class_id;
                 return class_info;
             }
