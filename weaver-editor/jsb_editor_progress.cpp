@@ -1,5 +1,7 @@
 ﻿#include "jsb_editor_progress.h"
 
+#include "core/object/message_queue.h"
+
 GodotJSEditorProgress::~GodotJSEditorProgress()
 {
     if (progress_) memdelete(progress_);
@@ -17,7 +19,14 @@ void GodotJSEditorProgress::_bind_methods()
 void GodotJSEditorProgress::init(const String& p_name, const String& p_description, int p_total_steps)
 {
     jsb_ensure(!progress_);
-    progress_ = memnew(EditorProgress(p_name, p_description, p_total_steps));
+    // Codegen runs overlap (a scene save and a reimport close together) and each passed the same
+    // name: ProgressDialog refused the second task, and once the first run ended it, the others
+    // stepped and ended a task that was gone ("!tasks.has(p_task)"). Tasks added while the message
+    // queue is flushing are refused as well. Give every task its own name, and skip the popup when
+    // it would be refused.
+    if (MessageQueue::get_singleton()->is_flushing()) return;
+    static uint32_t serial = 0;
+    progress_ = memnew(EditorProgress(vformat("%s-%d", p_name, ++serial), p_description, p_total_steps));
     progress_->step("", 0);
 }
 
