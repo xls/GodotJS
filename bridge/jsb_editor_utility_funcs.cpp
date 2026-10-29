@@ -956,7 +956,9 @@ namespace jsb
         for (int index = 0; index < num; ++index)
         {
             const StringName enum_name = CoreConstants::get_global_constant_enum(index);
-            if (enum_packs.has(enum_name))
+            // Constants outside any enum have no enum name: asking for the values of enum ""
+            // printed "Trying to get values of non-existing enum." on every codegen run.
+            if (enum_name == StringName() || enum_packs.has(enum_name))
             {
                 continue;
             }
