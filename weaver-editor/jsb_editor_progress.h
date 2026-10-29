@@ -3,8 +3,8 @@
 #include "jsb_editor_pch.h"
 
 /**
- * A simple wrapper for EditorProgress.
- * Used in editor scripts to show progress (a modal popup).
+ * A simple wrapper for EditorProgressBG.
+ * Used in editor scripts to show progress (a progress bar in the status bar).
  */
 class GodotJSEditorProgress : public Object
 {
@@ -14,7 +14,7 @@ private:
     String state_name_;
 
     //TODO alternative implementation of Progress in gdextension
-    EditorProgress* progress_ = nullptr;
+    EditorProgressBG* progress_ = nullptr;
 
 protected:
     static void _bind_methods();
