@@ -151,28 +151,36 @@ namespace jsb::internal
         return EDITOR_GET(kEdAutogenPath);
     }
 
-    bool Settings::get_autogen_scene_dts_on_save()
+    // A project setting with the same name, set in project.godot, overrides the editor setting:
+    // a project without TypeScript can turn off typings codegen without changing other projects.
+    static bool get_codegen_flag(const char* p_name)
     {
         init_editor_settings();
-        return EDITOR_GET(kEdAutogenSceneDTSOnSave);
+        if (ProjectSettings::get_singleton() && ProjectSettings::get_singleton()->has_setting(p_name))
+        {
+            return GLOBAL_GET(p_name);
+        }
+        return EDITOR_GET(p_name);
+    }
+
+    bool Settings::get_autogen_scene_dts_on_save()
+    {
+        return get_codegen_flag(kEdAutogenSceneDTSOnSave);
     }
 
     bool Settings::get_gen_scene_dts()
     {
-        init_editor_settings();
-        return EDITOR_GET(kEdGenSceneDTS);
+        return get_codegen_flag(kEdGenSceneDTS);
     }
 
     bool Settings::get_autogen_resource_dts_on_save()
     {
-        init_editor_settings();
-        return EDITOR_GET(kEdAutogenResourceDTSOnSave);
+        return get_codegen_flag(kEdAutogenResourceDTSOnSave);
     }
 
     bool Settings::get_gen_resource_dts()
     {
-        init_editor_settings();
-        return EDITOR_GET(kEdGenResourceDTS);
+        return get_codegen_flag(kEdGenResourceDTS);
     }
 
     bool Settings::get_codegen_use_project_settings()
