@@ -37,6 +37,13 @@ namespace jsb::internal
     static constexpr char kRtPackagingIncludeDirectories[] = JSB_MODULE_NAME_STRING "/editor/packaging/include_directories";
     static constexpr char kRtPackagingReferencedNodeModules[] = JSB_MODULE_NAME_STRING "/editor/packaging/referenced_node_modules";
 
+    // Per-project choice for the codegen editor settings of the same name: 0 = use the editor
+    // setting, 1 = on, 2 = off.
+    static constexpr char kPrGenSceneDTS[] = JSB_MODULE_NAME_STRING "/editor/codegen/generate_scene_dts";
+    static constexpr char kPrAutogenSceneDTSOnSave[] = JSB_MODULE_NAME_STRING "/editor/codegen/autogen_scene_dts_on_save";
+    static constexpr char kPrGenResourceDTS[] = JSB_MODULE_NAME_STRING "/editor/codegen/generate_resource_dts";
+    static constexpr char kPrAutogenResourceDTSOnSave[] = JSB_MODULE_NAME_STRING "/editor/codegen/autogen_resource_dts_on_save";
+
 #ifdef TOOLS_ENABLED
     bool init_editor_settings()
     {
@@ -130,6 +137,12 @@ namespace jsb::internal
             }
 
             _GLOBAL_DEF(kRtPackagingReferencedNodeModules, true, false);
+
+            for (const char* name : { kPrGenSceneDTS, kPrAutogenSceneDTSOnSave, kPrGenResourceDTS, kPrAutogenResourceDTSOnSave })
+            {
+                PropertyInfo codegen_choice(Variant::INT, name, PROPERTY_HINT_ENUM, "Editor Setting,On,Off");
+                _GLOBAL_DEF(codegen_choice, 0, JSB_SET_RESTART(false), JSB_SET_IGNORE_DOCS(false), JSB_SET_BASIC(true), JSB_SET_INTERNAL(false));
+            }
         }
     }
 
@@ -151,36 +164,44 @@ namespace jsb::internal
         return EDITOR_GET(kEdAutogenPath);
     }
 
-    // A project setting with the same name, set in project.godot, overrides the editor setting:
-    // a project without TypeScript can turn off typings codegen without changing other projects.
-    static bool get_codegen_flag(const char* p_name)
+    // The project setting (GodotJS > Editor > Codegen) decides when it is On or Off: a project
+    // without TypeScript can turn off typings codegen without changing other projects.
+    static bool get_codegen_flag(const char* p_project_name, const char* p_editor_name)
     {
+        init_settings();
         init_editor_settings();
-        if (ProjectSettings::get_singleton() && ProjectSettings::get_singleton()->has_setting(p_name))
+        switch ((int) GLOBAL_GET(p_project_name))
         {
-            return GLOBAL_GET(p_name);
+            case 1: return true;
+            case 2: return false;
+            default: break;
         }
-        return EDITOR_GET(p_name);
+        // Also read a project.godot key with the editor setting's name (6348fa1).
+        if (ProjectSettings::get_singleton()->has_setting(p_editor_name))
+        {
+            return GLOBAL_GET(p_editor_name);
+        }
+        return EDITOR_GET(p_editor_name);
     }
 
     bool Settings::get_autogen_scene_dts_on_save()
     {
-        return get_codegen_flag(kEdAutogenSceneDTSOnSave);
+        return get_codegen_flag(kPrAutogenSceneDTSOnSave, kEdAutogenSceneDTSOnSave);
     }
 
     bool Settings::get_gen_scene_dts()
     {
-        return get_codegen_flag(kEdGenSceneDTS);
+        return get_codegen_flag(kPrGenSceneDTS, kEdGenSceneDTS);
     }
 
     bool Settings::get_autogen_resource_dts_on_save()
     {
-        return get_codegen_flag(kEdAutogenResourceDTSOnSave);
+        return get_codegen_flag(kPrAutogenResourceDTSOnSave, kEdAutogenResourceDTSOnSave);
     }
 
     bool Settings::get_gen_resource_dts()
     {
-        return get_codegen_flag(kEdGenResourceDTS);
+        return get_codegen_flag(kPrGenResourceDTS, kEdGenResourceDTS);
     }
 
     bool Settings::get_codegen_use_project_settings()
