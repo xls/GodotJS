@@ -2,7 +2,15 @@
 
 GodotJSEditorProgress::~GodotJSEditorProgress()
 {
-    if (progress_) memdelete(progress_);
+    finish();
+}
+
+// EditorProgressBG reaches the status bar through EditorNode, which is gone when a codegen run is
+// cut short by quitting: the JS environment frees this object in ScriptServer::finish_languages().
+// Then the task is dropped without ending it (its UI is gone with the editor).
+static bool _editor_alive()
+{
+    return EditorNode::get_singleton() != nullptr;
 }
 
 void GodotJSEditorProgress::_bind_methods()
@@ -25,6 +33,7 @@ void GodotJSEditorProgress::init(const String& p_name, const String& p_descripti
     // background progress only queues deferred UI updates.
     // Every task gets its own name: codegen runs overlap (a scene save and a reimport close
     // together), and with one shared name the first run to finish ended the task of the others.
+    if (!_editor_alive()) return;
     static uint32_t serial = 0;
     progress_ = memnew(EditorProgressBG(vformat("%s-%d", p_name, ++serial), p_description, p_total_steps));
     progress_->step(0);
@@ -38,16 +47,26 @@ void GodotJSEditorProgress::set_state_name(const String& p_name)
 void GodotJSEditorProgress::set_current(int p_value)
 {
     // The status bar shows no state name; state_name_ is kept for the binding.
-    if (progress_) progress_->step(p_value);
+    if (progress_ && _editor_alive()) progress_->step(p_value);
 }
 
 void GodotJSEditorProgress::step()
 {
-    if (progress_) progress_->step();
+    if (progress_ && _editor_alive()) progress_->step();
 }
 
 void GodotJSEditorProgress::finish()
 {
-    if (progress_) memdelete(progress_);
+    if (!progress_) return;
+    if (_editor_alive())
+    {
+        memdelete(progress_);
+    }
+    else
+    {
+        // Skip ~EditorProgressBG (it would end the task through the null EditorNode).
+        progress_->task.~String();
+        memfree(progress_);
+    }
     progress_ = nullptr;
 }
